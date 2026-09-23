@@ -23,6 +23,7 @@ RUNTIME_IMPORTS = [
     "torch",
     "funasr",
     "faster_whisper",
+    "requests",
 ]
 BUILD_IMPORTS = ["PyInstaller"]
 

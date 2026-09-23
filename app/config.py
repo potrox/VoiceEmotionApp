@@ -26,6 +26,8 @@ class AppConfig:
     validate_external_audio: bool = True
     random_state: int | None = 42
     input_device_index: int | None = None
+    server_url: str = "http://127.0.0.1:8000"
+    server_dir: str = "server"
 
 
     manual_svm_c: float = 1.0

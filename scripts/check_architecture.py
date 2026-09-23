@@ -13,23 +13,38 @@ def audit(root: Path) -> list[str]:
         for package in ("app", "scripts")
         for file in (root / package).glob("*.py")
     }
+    server_root = root / "server" / "server_app"
+    for file in server_root.rglob("*.py"):
+        relative = file.relative_to(server_root).with_suffix("")
+        parts = list(relative.parts)
+        if parts[-1] == "__init__":
+            parts.pop()
+        modules[".".join(["server_app", *parts])] = file
     dependencies: dict[str, set[str]] = defaultdict(set)
     issues: list[str] = []
     for owner, file in modules.items():
         tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
-        package = owner.split(".", 1)[0]
         for node in ast.walk(tree):
             candidates: list[str] = []
             if isinstance(node, ast.ImportFrom):
-                if node.level == 1 and node.module:
-                    candidates = [f"{package}.{node.module.split('.')[0]}"]
-                elif node.level == 0 and node.module:
-                    candidates = [".".join(node.module.split(".")[:2])]
+                if node.level:
+                    base = owner.split(".")[:-node.level]
+                    target = ".".join([*base, *(node.module.split(".") if node.module else [])])
+                else:
+                    target = node.module or ""
+                if target:
+                    candidates.append(target)
+                    candidates.extend(
+                        f"{target}.{alias.name}" for alias in node.names
+                        if alias.name != "*"
+                    )
             elif isinstance(node, ast.Import):
-                candidates = [".".join(alias.name.split(".")[:2]) for alias in node.names]
+                candidates = [alias.name for alias in node.names]
             for target in candidates:
                 if owner.startswith("app.") and target.startswith("scripts."):
                     issues.append(f"{owner} imports experiment code {target}")
+                if owner.startswith("server_app.") and target.startswith(("app.", "scripts.")):
+                    issues.append(f"server module {owner} imports desktop/experiment code {target}")
                 if (
                     owner.startswith("app.")
                     and not owner.startswith("app.gui")
@@ -65,4 +80,4 @@ if __name__ == "__main__":
         for problem in problems:
             print(problem)
         raise SystemExit(1)
-    print("Architecture check OK: no import cycles or core-to-UI dependencies.")
+    print("Architecture check OK: no import cycles or inverted desktop/server dependencies.")

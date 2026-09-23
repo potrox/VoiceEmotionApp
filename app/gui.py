@@ -20,6 +20,7 @@ from .dataset import DatasetLoadResult
 from .gui_dataset import DatasetTabMixin
 from .gui_home import HomeTabMixin
 from .gui_recognition import RecognitionTabMixin
+from .gui_server import ServerTabMixin
 from .gui_recording import RecordingTabMixin
 from .gui_settings import SettingsTabMixin
 from .gui_shared import DARK_QSS, LIGHT_QSS
@@ -36,6 +37,7 @@ class MainWindow(
     TrainingTabMixin,
     TestingTabMixin,
     RecognitionTabMixin,
+    ServerTabMixin,
     SettingsTabMixin,
     QMainWindow,
 ):
@@ -89,6 +91,7 @@ class MainWindow(
         self._build_training_tab()
         self._build_testing_tab()
         self._build_recognition_tab()
+        self._build_server_tab()
         self._build_settings_tab()
         self._apply_theme(self.cfg.theme)
         self._load_best_model_pointer()

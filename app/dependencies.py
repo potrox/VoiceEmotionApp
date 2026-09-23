@@ -30,6 +30,7 @@ RUNTIME_DEPENDENCIES: List[Dependency] = [
     Dependency("torch", "torch", "emotion2vec inference runtime"),
     Dependency("funasr", "funasr", "emotion2vec feature extraction"),
     Dependency("faster_whisper", "faster-whisper", "local Russian speech transcription"),
+    Dependency("requests", "requests", "optional server administration"),
 ]
 
 BUILD_DEPENDENCIES: List[Dependency] = [

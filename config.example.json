@@ -14,6 +14,8 @@
   "feature_selection": "auto",
   "random_state": 42,
   "input_device_index": null,
+  "server_url": "http://127.0.0.1:8000",
+  "server_dir": "server",
   "manual_svm_c": 1.0,
   "manual_svm_gamma": "scale",
   "manual_svm_kernel": "rbf",

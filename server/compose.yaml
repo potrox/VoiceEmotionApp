@@ -1,0 +1,132 @@
+name: voiceemotion
+
+services:
+  db:
+    image: postgres:17-bookworm
+    container_name: voiceemotion-db
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --data-checksums
+      APP_DB_USER: ${APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voiceemotion-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["uvicorn", "server_app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:8000:8000"
+    volumes:
+      - ./models:/data/models
+      - ./logs:/data/logs
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voiceemotion-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["python", "-m", "server_app.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voiceemotion-scheduler
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["python", "-m", "server_app.scheduler"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+  backup:
+    build:
+      context: ./docker/backup
+      dockerfile: Dockerfile
+    container_name: voiceemotion-backup
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY}
+    command: ["/bin/sh", "/scripts/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backups:/backups
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: voiceemotion-postgres-data

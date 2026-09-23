@@ -34,6 +34,9 @@ PUBLIC_TOP_LEVEL = {
     ".githooks/pre-commit",
 }
 PUBLIC_SOURCE_FILES = {
+    "app/gui_server.py",
+    "app/server_integration.py",
+    "tests/test_server_integration.py",
     "app/__init__.py",
     "app/asr.py",
     "app/audio.py",
@@ -92,6 +95,52 @@ PUBLIC_SOURCE_FILES = {
     "tests/test_honest_models.py",
     "tests/test_publication_guard.py",
 }
+PUBLIC_SERVER_FILES = {
+    "server/.dockerignore",
+    "server/.gitignore",
+    "server/Dockerfile",
+    "server/README_SERVER.md",
+    "server/alembic.ini",
+    "server/compose.yaml",
+    "server/create_registration_code.ps1",
+    "server/docker/backup/Dockerfile",
+    "server/docker/backup/backup.sh",
+    "server/docker/db/init/01-init-app.sh",
+    "server/migrations/env.py",
+    "server/migrations/script.py.mako",
+    "server/migrations/versions/0001_initial.py",
+    "server/requirements.txt",
+    "server/server_app/__init__.py",
+    "server/server_app/config.py",
+    "server/server_app/constants.py",
+    "server/server_app/database.py",
+    "server/server_app/dependencies.py",
+    "server/server_app/main.py",
+    "server/server_app/models.py",
+    "server/server_app/routers/__init__.py",
+    "server/server_app/routers/admin.py",
+    "server/server_app/routers/client.py",
+    "server/server_app/routers/events.py",
+    "server/server_app/routers/health.py",
+    "server/server_app/routers/models_router.py",
+    "server/server_app/routers/stats.py",
+    "server/server_app/scheduler.py",
+    "server/server_app/schemas.py",
+    "server/server_app/security.py",
+    "server/server_app/services/__init__.py",
+    "server/server_app/services/aggregation.py",
+    "server/server_app/services/aggregation_core.py",
+    "server/server_app/services/audit.py",
+    "server/server_app/services/events.py",
+    "server/server_app/services/models_service.py",
+    "server/server_app/services/registration.py",
+    "server/server_app/worker.py",
+    "server/start_server.ps1",
+    "server/stop_server.ps1",
+    "server/test_server.ps1",
+    "server/tests/test_aggregation.py",
+    "server/tests/test_event_schema.py",
+}
 PRIVATE_KEY = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----")
 KNOWN_TOKEN = re.compile(
     r"(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
@@ -139,7 +188,12 @@ def allowed_path(path: str, prefix: str) -> bool:
     if not path.startswith(prefix):
         return False
     relative = path[len(prefix):]
-    return relative in PUBLIC_TOP_LEVEL or relative in PUBLIC_SOURCE_FILES or relative == PUBLIC_MODEL_PATH
+    return (
+        relative in PUBLIC_TOP_LEVEL
+        or relative in PUBLIC_SOURCE_FILES
+        or relative in PUBLIC_SERVER_FILES
+        or relative == PUBLIC_MODEL_PATH
+    )
 
 
 def released_model_problems(data: bytes) -> list[str]:
@@ -169,7 +223,7 @@ def content_problems(data: bytes) -> list[str]:
             problems.append(description)
     for match in ASSIGNED_SECRET.finditer(value):
         assigned = (match.group(1) or match.group(2)).strip().lower()
-        if assigned not in PLACEHOLDERS and not assigned.startswith(("os.environ", "getenv(")):
+        if assigned not in PLACEHOLDERS | {"issued_token"} and not assigned.startswith(("os.environ", "getenv(")):
             problems.append("assigned credential-like value")
             break
     return problems
