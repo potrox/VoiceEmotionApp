@@ -1,21 +1,26 @@
-"""Сохранение размеченных записей в пользовательский датасет."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional, Tuple
 
-import numpy as np
-
-from .audio import analyze_quality, preprocess_signal, save_wav
+from .audio import analyze_quality, preprocess_signal, record_microphone, save_wav
 from .constants import EMOTIONS
 from .dataset import create_user_dataset_row
 from .storage import timestamp
 
 
-@dataclass(frozen=True)
-class SavedRecording:
 
+
+@dataclass
+class PendingRecording:
+    samples: object
+    cache_path: Path
+    quality: object
+
+
+@dataclass
+class SavedRecording:
     original_path: Path
     processed_path: Path
     csv_path: Path
@@ -23,93 +28,80 @@ class SavedRecording:
 
 
 class UserDatasetRecorder:
-
-    def __init__(self, datasets_dir: str | Path, sample_rate: int = 16_000) -> None:
+    def __init__(self, datasets_dir: str | Path, sample_rate: int = 16000):
         self.datasets_dir = Path(datasets_dir)
-        self.sample_rate = int(sample_rate)
-        self.dataset_root = self.datasets_dir / "user_dataset"
-        self.dataset_root.mkdir(parents=True, exist_ok=True)
+        self.sample_rate = sample_rate
+        self.base = self.datasets_dir / "user_dataset"
+        self.base.mkdir(parents=True, exist_ok=True)
 
     def next_speaker_id(self) -> str:
-        speaker_numbers: list[int] = []
-        for speaker_directory in self.dataset_root.glob("speaker_*"):
-            if not speaker_directory.is_dir():
-                continue
+        existing = [p.name for p in self.base.glob("speaker_*") if p.is_dir()]
+        numbers = []
+        for name in existing:
             try:
-                speaker_numbers.append(
-                    int(speaker_directory.name.removeprefix("speaker_"))
-                )
-            except ValueError:
-                continue
-        next_number = max(speaker_numbers, default=0) + 1
-        return f"speaker_{next_number:03d}"
+                numbers.append(int(name.split("_")[-1]))
+            except Exception:
+                pass
+        return f"speaker_{(max(numbers) + 1) if numbers else 1:03d}"
 
-    def save_recording(
-        self,
-        audio_signal: np.ndarray,
-        speaker_id: str,
-        emotion: str,
-        gender: str,
-        age_group: str,
-        phrase: str,
-        language: str = "ru",
-    ) -> SavedRecording:
+    def record(self, duration_sec: int, input_device_index: Optional[int] = None, cache_dir: str | Path | None = None) -> PendingRecording:
+        y = record_microphone(duration_sec, self.sample_rate, device_index=input_device_index)
+        quality = analyze_quality(y, self.sample_rate, training=False)
+        cache_base = Path(cache_dir) if cache_dir is not None else self.datasets_dir.parent / "cache"
+        cache_base.mkdir(parents=True, exist_ok=True)
+        cache_path = cache_base / f"microphone_cache_{timestamp()}.wav"
+        save_wav(cache_path, y, self.sample_rate)
+        return PendingRecording(samples=y, cache_path=cache_path, quality=quality)
+
+    def save_recording(self, y, speaker_id: str, emotion: str, gender: str, age_group: str, phrase: str, language: str = "ru") -> SavedRecording:
         if not speaker_id:
-            raise ValueError(
-                "Сохранение записи без идентификатора диктора не допускается."
-            )
+            raise ValueError("Сохранение записи без идентификатора диктора не допускается.")
         if emotion not in EMOTIONS:
-            raise ValueError(
-                "Сохранение записи без поддерживаемой эмоции не допускается."
-            )
+            raise ValueError("Сохранение записи без поддерживаемой эмоции не допускается.")
         if not gender or gender == "не указано":
-            raise ValueError(
-                "Сохранение записи без указания пола диктора не допускается."
-            )
+            raise ValueError("Сохранение записи без указания пола диктора не допускается.")
         if not age_group:
-            raise ValueError(
-                "Сохранение записи без возрастной группы диктора не допускается."
-            )
+            raise ValueError("Сохранение записи без возрастной группы диктора не допускается.")
         if not phrase.strip():
             raise ValueError("Сохранение записи без текста фразы не допускается.")
-
-        quality = analyze_quality(audio_signal, self.sample_rate, training=True)
+        quality = analyze_quality(y, self.sample_rate, training=True)
         if not quality.ok:
             raise ValueError("Запись отклонена: " + "; ".join(quality.warnings))
+        stamp = timestamp()
+        emotion_dir = self.base / speaker_id / emotion
+        original_dir = emotion_dir / "original"
+        processed_dir = emotion_dir / "processed"
+        idx = len(list(original_dir.glob("*.wav"))) + 1
+        filename = f"{speaker_id}_{emotion}_{stamp}_{idx:03d}.wav"
+        original_path = save_wav(original_dir / filename, y, self.sample_rate)
+        y_processed = preprocess_signal(y, self.sample_rate, normalize=True, denoise=True, trim=True)
+        processed_path = save_wav(processed_dir / filename, y_processed, self.sample_rate)
+        csv_path = self.base / "user_dataset.csv"
 
-        emotion_directory = self.dataset_root / speaker_id / emotion
-        original_directory = emotion_directory / "original"
-        processed_directory = emotion_directory / "processed"
-        recording_index = len(list(original_directory.glob("*.wav"))) + 1
-        filename = (
-            f"{speaker_id}_{emotion}_{timestamp()}_{recording_index:03d}.wav"
-        )
-        original_path = save_wav(
-            original_directory / filename, audio_signal, self.sample_rate
-        )
-        processed_signal = preprocess_signal(
-            audio_signal, normalize=True, denoise=True, trim=True
-        )
-        processed_path = save_wav(
-            processed_directory / filename, processed_signal, self.sample_rate
-        )
-        csv_path = self.dataset_root / "user_dataset.csv"
+
+
+        try:
+            csv_processed_path = processed_path.relative_to(self.base)
+        except Exception:
+            csv_processed_path = processed_path
+        try:
+            csv_original_path = original_path.relative_to(self.base)
+        except Exception:
+            csv_original_path = original_path
         create_user_dataset_row(
             csv_path=csv_path,
-            file_path=processed_path.relative_to(self.dataset_root),
-            original_path=original_path.relative_to(self.dataset_root),
+            file_path=csv_processed_path,
+            original_path=csv_original_path,
             emotion=emotion,
             speaker_id=speaker_id,
             gender=gender,
             age_group=age_group,
             text=phrase,
             language=language,
-            duration=len(audio_signal) / self.sample_rate,
+
+
+
+            duration=len(y) / self.sample_rate,
             sample_rate=self.sample_rate,
         )
-        return SavedRecording(
-            original_path=original_path,
-            processed_path=processed_path,
-            csv_path=csv_path,
-            warnings=quality.warnings,
-        )
+        return SavedRecording(original_path=Path(original_path), processed_path=Path(processed_path), csv_path=csv_path, warnings=quality.warnings)

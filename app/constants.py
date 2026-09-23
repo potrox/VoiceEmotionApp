@@ -1,8 +1,4 @@
-"""Общие параметры аудио, признаков и поддерживаемых эмоций."""
-
 from __future__ import annotations
-
-FEATURE_SCHEMA_VERSION = 4
 
 APP_NAME = "VoiceEmotionApp"
 APP_VERSION = "1.0.0"
@@ -44,6 +40,7 @@ CSV_COLUMN_ALIASES = {
     "text": ["text", "phrase", "transcript", "фраза", "текст"],
     "language": ["language", "lang", "язык"],
     "quality": ["quality", "качество"],
+    "dataset_split": ["dataset_split", "split", "subset", "набор", "выборка"],
 }
 
 AGE_GROUPS = ["до 18", "18-25", "26-35", "36-50", "старше 50"]

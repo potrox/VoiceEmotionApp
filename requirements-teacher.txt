@@ -1,0 +1,5 @@
+# Optional offline audio teacher. Not required for normal VoiceEmotionApp use.
+torch>=2.2
+transformers>=4.45
+safetensors>=0.4
+funasr==1.4.16

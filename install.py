@@ -1,62 +1,46 @@
-"""Установка приложения и создание рабочих каталогов."""
-
 from __future__ import annotations
 
 import argparse
 import platform
 import sys
-from pathlib import Path
 
-from bootstrap import (
-    bootstrap_and_relaunch,
-    dependencies_available,
-    install_dependencies_into_venv,
-    venv_dir,
-)
+from bootstrap import bootstrap_and_relaunch, venv_dir
 
 bootstrap_and_relaunch(include_build=False, entry_script="install.py")
 
+from app.dependencies import ensure_dependencies, find_missing_dependencies, run_pip_install
+
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Установка зависимостей VoiceEmotionApp")
-    parser.add_argument(
-        "--build",
-        action="store_true",
-        help="также установить зависимости для сборки EXE",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="принудительно выполнить pip install -r requirements.txt",
-    )
+    parser = argparse.ArgumentParser(description="Install VoiceEmotionApp dependencies")
+    parser.add_argument("--build", action="store_true", help="also check dependencies for exe build")
+    parser.add_argument("--force", action="store_true", help="force pip install -r requirements.txt")
     args = parser.parse_args()
 
-    print("Установка зависимостей VoiceEmotionApp")
+    print("VoiceEmotionApp dependency installer")
     print(f"Python: {sys.version.split()[0]} ({platform.python_implementation()})")
-    print(f"Виртуальное окружение: {venv_dir()}")
+    print(f"Virtual environment: {venv_dir()}")
     if sys.version_info < (3, 11):
-        print("ПРЕДУПРЕЖДЕНИЕ: требуется Python 3.11 или новее.")
+        print("WARNING: Python 3.11 is recommended for the saved v11 model.")
     if sys.version_info >= (3, 13):
-        print(
-            "ПРЕДУПРЕЖДЕНИЕ: для используемых ML- и аудиобиблиотек "
-            "рекомендуется Python 3.11 или 3.12."
-        )
+        print("WARNING: Python 3.11 is recommended for the saved v11 model and audio packages.")
 
     try:
-        current_python = Path(sys.executable)
-        if args.force or not dependencies_available(
-            current_python, include_build=args.build
-        ):
-            install_dependencies_into_venv(
-                current_python, include_build=args.build
-            )
+        if args.force:
+            run_pip_install()
+        ensure_dependencies(include_build=args.build, auto_install=True)
     except Exception as exc:
         print()
-        print("ОШИБКА УСТАНОВКИ:")
+        print("INSTALLATION ERROR:")
         print(exc)
         return 1
 
-    print("Зависимости установлены и доступны.")
+    missing = find_missing_dependencies(include_build=args.build)
+    if missing:
+        print("Could not confirm that all dependencies are installed.")
+        return 1
+
+    print("Done: dependencies are installed and available.")
     return 0
 
 

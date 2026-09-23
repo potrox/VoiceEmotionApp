@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+if [ -f "$repo_root/scripts/check_publication.py" ]; then
+    checker="$repo_root/scripts/check_publication.py"
+else
+    checker="$repo_root/VoiceEmotionApp_refactor/scripts/check_publication.py"
+fi
+
+if command -v python >/dev/null 2>&1; then
+    python "$checker" --staged
+elif command -v py >/dev/null 2>&1; then
+    py -3 "$checker" --staged
+else
+    echo "Python is required for the publication safety check." >&2
+    exit 2
+fi

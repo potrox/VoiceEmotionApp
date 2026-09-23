@@ -1,5 +1,3 @@
-"""Сборка Windows-приложения с помощью PyInstaller."""
-
 from __future__ import annotations
 
 import shutil
@@ -9,7 +7,12 @@ from pathlib import Path
 
 from bootstrap import bootstrap_and_relaunch
 
+
+
+
 bootstrap_and_relaunch(include_build=True, entry_script="build.py")
+
+from app.dependencies import ensure_dependencies
 
 ROOT = Path(__file__).resolve().parent
 DIST_DIR = ROOT / "dist"
@@ -18,6 +21,8 @@ SPEC_FILE = ROOT / "VoiceEmotionApp.spec"
 
 
 def main() -> int:
+    ensure_dependencies(include_build=True, auto_install=True)
+
     if DIST_DIR.exists():
         shutil.rmtree(DIST_DIR)
     if BUILD_DIR.exists():
@@ -37,9 +42,9 @@ def main() -> int:
         str(ROOT / "main.py"),
     ]
 
-    print("Сборка VoiceEmotionApp с помощью PyInstaller...")
+    print("Building exe with PyInstaller...")
     subprocess.check_call(cmd, cwd=str(ROOT))
-    print(f"Готово. Каталог приложения: {DIST_DIR / 'VoiceEmotionApp'}")
+    print(f"Done. EXE folder: {DIST_DIR / 'VoiceEmotionApp'}")
     return 0
 
 
